@@ -1,0 +1,649 @@
+Nextjs 15 Rules
+
+{
+
+Documentation
+
+markdown support
+
+https://nextjs.org/docs/app/guides/mdx
+
+NEXT.JS ROUTING & NAVIGATION RULES
+
+1. FILE-BASED ROUTING
+   - Use `app/page.tsx` for routes (not pages/)
+   - Folders = route segments, Files = UI
+   - Required: Root layout with <html> and <body> tags
+
+2. DYNAMIC ROUTES
+   - Use `[param]` folder syntax: `app/blog/[slug]/page.tsx`
+   - Access params: `params: Promise<{ slug: string }>`
+   - Always await params: `const { slug } = await params`
+
+3. LAYOUTS
+   - Nest automatically via folder hierarchy
+   - Accept `children: React.ReactNode` prop
+   - Preserve state on navigation
+
+4. SEARCH PARAMS
+   - Server Components: Use `searchParams` prop (Promise)
+   - Client Components: Use `useSearchParams()` hook
+   - Await searchParams: `const filters = (await searchParams).filters`
+
+5. NAVIGATION
+   - Always use `<Link>` from `next/link` (NOT <a> tags)
+   - Prefetching enabled by default
+   - Disable: `<Link prefetch={false}>`
+
+6. PERFORMANCE OPTIMIZATION
+   - Add `loading.tsx` for dynamic routes
+   - Use `generateStaticParams()` for static generation
+   - Streaming enabled with loading.tsx
+
+7. CLIENT COMPONENTS
+   - Mark with `'use client'` directive
+   - Required for: useSearchParams, useState, event handlers
+
+8. HISTORY API
+   - Use `window.history.pushState()` for new entries
+   - Use `window.history.replaceState()` for replacing current
+   - Integrates with usePathname/useSearchParams
+SERVER & CLIENT COMPONENTS RULES
+
+1. DEFAULT BEHAVIOR
+   - All components are Server Components by default
+   - Client Components require explicit 'use client' directive
+   - Place 'use client' at top of file, above imports
+
+2. WHEN TO USE CLIENT COMPONENTS
+   - State management (useState, useReducer)
+   - Event handlers (onClick, onChange, onSubmit)
+   - Lifecycle effects (useEffect)
+   - Browser APIs (localStorage, window, navigator)
+   - Custom hooks that use above features
+
+3. WHEN TO USE SERVER COMPONENTS
+   - Data fetching (database, API calls)
+   - Using secrets/API keys (process.env without NEXT_PUBLIC_)
+   - Heavy computations to reduce client JS
+   - Static content rendering
+
+4. COMPONENT COMPOSITION
+   - Server Components can import Client Components
+   - Client Components CANNOT import Server Components directly
+   - Pass Server Components as children/props to Client Components
+   - Props from Server to Client must be serializable
+
+5. OPTIMIZATION PATTERNS
+   - Add 'use client' only to interactive components, not entire layouts
+   - Keep providers as deep in tree as possible
+   - Once 'use client' is declared, all imports become client bundle
+
+6. THIRD-PARTY COMPONENTS
+   - Wrap third-party components lacking 'use client' in your own Client Component
+   - Import and re-export with 'use client' directive
+
+7. CONTEXT PROVIDERS
+   - Context requires Client Components
+   - Create provider as Client Component with children prop
+   - Import provider in Server Component layout
+
+8. ENVIRONMENT VARIABLES
+   - Client-exposed vars must use NEXT_PUBLIC_ prefix
+   - Use 'server-only' package to prevent accidental client imports
+   - Non-prefixed env vars become empty strings on client
+
+9. DATA PASSING PATTERNS
+   - Props: Server → Client (must be serializable)
+   - Children pattern: Pass Server Components into Client slots
+   - Streaming: Use 'use' hook for async data
+
+PARTIAL PRERENDERING (PPR) RULES
+
+1. ENABLING PPR
+   - Add to next.config.ts: `experimental: { ppr: 'incremental' }`
+   - Opt-in per route: `export const experimental_ppr = true`
+   - Applies to all children segments automatically
+   - Currently experimental, not for production
+
+2. PPR ARCHITECTURE
+   - Static shell prerendered at build time
+   - Dynamic content streamed in parallel
+   - Single HTTP request for full response
+   - Suspense boundaries mark dynamic holes
+
+3. DYNAMIC APIS TRIGGER
+   - cookies, headers, connection, draftMode
+   - searchParams prop, unstable_noStore
+   - fetch with { cache: 'no-store' }
+   - Wrap dynamic components in Suspense
+
+4. SUSPENSE REQUIREMENTS
+   - Required for dynamic content boundaries
+   - Fallback UI shown during streaming
+   - Component itself not made dynamic by Suspense
+   - Enables parallel streaming of dynamic parts
+
+---
+
+FETCHING DATA RULES
+
+1. SERVER COMPONENTS
+   - Make component async and await fetch/database calls
+   - fetch not cached by default (route still prerendered)
+   - Use { cache: 'no-store' } for dynamic rendering
+   - Direct database queries allowed
+
+2. CLIENT COMPONENTS
+   - Use React's `use` hook for streaming
+   - Pass promise from Server Component as prop
+   - Wrap in Suspense for loading states
+   - Or use SWR/React Query libraries
+
+3. STREAMING PATTERNS
+   - loading.js for entire page streaming
+   - <Suspense> for granular component streaming
+   - Don't await in Server Component when passing to use()
+   - Meaningful loading states (skeletons, spinners)
+
+4. DATA FETCHING OPTIMIZATION
+   - Parallel: Use Promise.all() for multiple requests
+   - Sequential: When one depends on another
+   - Preloading: Call data function before conditional logic
+   - Request deduplication automatic for same URL/options
+
+5. CACHING WITH REACT
+   - Wrap data functions with React's cache()
+   - Deduplicates within single render pass
+   - Use with 'server-only' package
+
+---
+
+UPDATING DATA RULES
+
+1. SERVER FUNCTIONS BASICS
+   - Mark with 'use server' directive
+   - Must be async functions
+   - Can be at function level or file level
+   - Called via POST method only
+
+2. USAGE IN COMPONENTS
+   - Server Components: Can define inline
+   - Client Components: Must import from separate file
+   - Pass as props to Client Components allowed
+
+3. INVOCATION METHODS
+   - Forms: action prop on <form>
+   - Buttons: formAction prop
+   - Event handlers: onClick, etc (Client only)
+   - useEffect: For automatic triggers
+
+4. FORM DATA HANDLING
+   - Automatically receives FormData object
+   - Extract with formData.get('fieldName')
+   - Progressive enhancement by default
+
+5. COMMON PATTERNS
+   - Pending state: useActionState hook
+   - Revalidation: revalidatePath/revalidateTag
+   - Redirects: redirect() function
+   - Cookies: cookies() API
+
+---
+
+CACHING & REVALIDATION RULES
+
+1. FETCH CACHING
+   - Not cached by default
+   - Force cache: { cache: 'force-cache' }
+   - Time-based: { next: { revalidate: 3600 } }
+   - Routes prerendered even without cache
+
+2. UNSTABLE_CACHE
+   - Wrap async functions for caching
+   - Syntax: unstable_cache(fn, keys, options)
+   - Options: { tags: ['tag'], revalidate: seconds }
+   - Include variables in cache key array
+
+3. REVALIDATION METHODS
+   - revalidateTag('tagName'): By cache tag
+   - revalidatePath('/path'): By route path
+   - Call in Server Actions or Route Handlers
+
+4. TAGGING STRATEGIES
+   - fetch: { next: { tags: ['tag'] } }
+   - unstable_cache: { tags: ['tag'] }
+   - Reuse tags across functions for batch revalidation
+
+
+
+ERROR HANDLING RULES
+
+1. EXPECTED ERRORS (Server Functions)
+   - Return errors as values, NOT throw
+   - Use useActionState hook for handling
+   - Display state.message for user feedback
+   - Add aria-live="polite" for accessibility
+
+2. SERVER COMPONENTS ERRORS
+   - Use response status to conditionally render
+   - Call notFound() for 404 scenarios
+   - Create not-found.tsx for custom 404 UI
+   - Return error messages or redirect
+
+3. ERROR BOUNDARIES (error.tsx)
+   - Must be Client Components ('use client')
+   - Receives error object and reset function
+   - Place at different route levels for granular handling
+   - Errors bubble up to nearest parent boundary
+
+4. GLOBAL ERRORS
+   - Use global-error.tsx in root app directory
+   - Must include <html> and <body> tags
+   - Replaces root layout when active
+   - Less common, for critical app-wide errors
+
+5. EVENT HANDLER ERRORS
+   - Not caught by error boundaries
+   - Use try/catch with useState for UI updates
+   - startTransition errors bubble to boundaries
+   - Handle manually in async/event code
+
+---
+
+IMAGE OPTIMIZATION RULES
+
+1. NEXT/IMAGE COMPONENT
+   - Import from 'next/image'
+   - Automatic size optimization and WebP
+   - Lazy loading by default
+   - Prevents layout shift
+
+2. LOCAL IMAGES
+   - Store in /public folder
+   - Reference from base URL: src="/image.png"
+   - Static imports auto-provide dimensions
+   - Optional blur placeholder with imports
+
+3. REMOTE IMAGES
+   - Must provide width and height manually
+   - Configure remotePatterns in next.config.ts
+   - Be specific with patterns for security
+   - Alternative: use fill prop for parent sizing
+
+4. CONFIGURATION EXAMPLE
+
+
+images: { remotePatterns: [{ protocol: 'https', hostname: 's3.amazonaws.com', pathname: '/my-bucket/**' }] }
+
+
+---
+
+FONT OPTIMIZATION RULES
+
+1. IMPORT PATTERNS
+- Google: import from 'next/font/google'
+- Local: import from 'next/font/local'
+- Apply className to elements
+- Fonts auto-hosted, no external requests
+
+2. GOOGLE FONTS
+- Prefer variable fonts for flexibility
+- Specify subsets: ['latin']
+- Non-variable needs weight specification
+- No requests sent to Google
+
+3. LOCAL FONTS
+- Specify src path to font file
+- Store in /public or colocate in /app
+- Support multiple files for font family
+- Use array for different weights/styles
+
+4. APPLICATION-WIDE FONTS
+- Apply to Root Layout for global use
+- Scoped to component by default
+- Variable fonts recommended
+
+---
+
+METADATA & OG IMAGES RULES
+
+1. STATIC METADATA
+- Export metadata object from layout/page
+- Default tags always added (charset, viewport)
+- Full options in generateMetadata docs
+
+2. DYNAMIC METADATA
+- Use generateMetadata function
+- Access params and searchParams
+- Fetch data for dynamic values
+- Streams separately for performance
+
+3. DATA DEDUPLICATION
+- Use React cache() for shared data
+- Prevents duplicate fetches
+- Share between metadata and page
+
+4. FILE-BASED METADATA
+- favicon.ico in app root
+- opengraph-image.{jpg,png} for OG images
+- More specific images override parent
+- robots.txt, sitemap.xml supported
+
+5. GENERATED OG IMAGES
+- Use ImageResponse from 'next/og'
+- Create opengraph-image.ts files
+- JSX and CSS for dynamic generation
+- Flexbox supported, not grid
+
+---
+
+ROUTE HANDLERS RULES
+
+1. FILE CONVENTION
+- Use route.ts/js files in app directory
+- Cannot coexist with page.js at same level
+- Supports GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+
+2. CACHING BEHAVIOR
+- GET not cached by default
+- Force cache: export const dynamic = 'force-static'
+- Other methods never cached
+- Special handlers (sitemap.ts) static by default
+
+3. REQUEST/RESPONSE
+- Use Web Request/Response APIs
+- Extended with NextRequest/NextResponse
+- 405 returned for unsupported methods
+
+4. ROUTE RESOLUTION
+- Lowest level routing primitive
+- No participation in layouts
+- Takes over all HTTP verbs for route
+
+---
+
+MIDDLEWARE RULES
+
+1. FILE LOCATION
+- Use middleware.ts in project root
+- Same level as app/pages folders
+- Only one middleware file per project
+- Can import modules for organization
+
+2. EXECUTION
+- Runs before request completion
+- Can redirect, rewrite, modify headers
+- Return NextResponse for modifications
+
+3. MATCHER CONFIG
+- Define paths with matcher config
+- Use :path* for wildcard matching
+- Centralized route control
+
+4. LIMITATIONS
+- Not for slow data fetching
+- fetch cache options have no effect
+- Not for session management
+- Quick operations only
+
+INTERCEPTING ROUTES RULES
+
+1. CONVENTION
+   - Use (..) syntax for intercepting routes
+   - (.) = same level, (..) = one level up
+   - (..)(..) = two levels up, (...) = from root
+   - Based on route segments, NOT file system
+
+2. USE CASES
+   - Modals with shareable URLs
+   - Preserve context on refresh
+   - Proper back/forward navigation
+   - Soft nav shows modal, hard nav shows page
+
+3. MODAL PATTERN
+   - Combine with Parallel Routes (@slot)
+   - Intercepted route in slot folder
+   - Direct route exists separately
+   - Example: (..)photo in @modal slot
+
+---
+
+PARALLEL ROUTES RULES
+
+1. SLOT CONVENTION
+   - Use @folder naming (e.g., @analytics, @team)
+   - Slots passed as props to parent layout
+   - children is implicit slot (no @ needed)
+   - Slots don't affect URL structure
+
+2. DEFAULT.JS REQUIREMENT
+   - Required for unmatched slots
+   - Prevents 404 on refresh/hard navigation
+   - Return null for hidden slots
+   - Needed for children slot too
+
+3. NAVIGATION BEHAVIOR
+   - Soft nav: maintains active slot states
+   - Hard nav: uses default.js for unmatched
+   - All slots at level must match static/dynamic
+
+4. MODAL IMPLEMENTATION
+   - @auth slot with default returning null
+   - Intercept route: @auth/(.)login/page.tsx
+   - Direct route: /login/page.tsx
+   - Use router.back() or Link to close
+
+5. CONDITIONAL RENDERING
+   - Check conditions in layout (e.g., user role)
+   - Return different slots based on logic
+   - useSelectedLayoutSegment('slotName') for active segment
+
+---
+
+ROUTE HANDLERS (route.js) RULES
+
+1. HTTP METHODS
+   - Supported: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+   - Export named functions for each method
+   - 405 returned for unsupported methods
+   - OPTIONS auto-implemented if not defined
+
+2. PARAMETERS
+   - request: NextRequest object (extends Web Request)
+   - context.params: Promise with dynamic segments
+   - Always await params: const { id } = await params
+
+3. CACHING
+   - GET not cached by default
+   - Force static: export const dynamic = 'force-static'
+   - Other methods never cached
+   - Special handlers (sitemap.ts) static by default
+
+4. RESPONSE PATTERNS
+   - Return Response.json() for JSON
+   - Use NextResponse for redirects/rewrites
+   - Streaming with ReadableStream
+   - CORS headers in response
+
+5. DATA HANDLING
+   - FormData: await request.formData()
+   - JSON: await request.json()
+   - Text: await request.text()
+   - Query params: request.nextUrl.searchParams
+
+---
+
+MIDDLEWARE RULES
+
+1. FILE LOCATION
+   - Single middleware.ts in project root
+   - Export middleware function (default or named)
+   - Can import modules for organization
+   - Runs before route rendering
+
+2. MATCHER CONFIG
+   - Required: paths must start with /
+   - Supports wildcards: /about/:path*
+   - Regex in parentheses: /(.*) 
+   - Arrays for multiple paths
+
+3. MATCHER ADVANCED
+   - has/missing conditions for headers/cookies
+   - source, regexp, locale options
+   - Negative lookaheads for exclusions
+   - Static analysis at build time
+
+4. REQUEST/RESPONSE
+   - Use NextRequest/NextResponse
+   - Modify headers, cookies, redirect, rewrite
+   - Return NextResponse.next() to continue
+   - Direct Response for immediate return
+
+5. EXECUTION ORDER
+   - After next.config headers/redirects
+   - Before filesystem routes
+   - Before dynamic routes
+   - Edge runtime by default
+
+6. COOKIES/HEADERS
+   - request.cookies.get/set/delete
+   - Clone headers before modifying
+   - response.headers.set() for outgoing
+   - Avoid large headers (431 error)
+
+---
+
+LOADING.JS RULES
+
+1. BASIC SETUP
+   - Create loading.js in route folder
+   - Automatically wraps page.js in Suspense
+   - Server Component by default
+   - Can use 'use client' if needed
+
+2. BEHAVIOR
+   - Shows immediately on navigation
+   - Prefetched for instant display
+   - Navigation is interruptible
+   - Layouts remain interactive
+
+3. STREAMING
+   - 200 status always returned
+   - SEO not affected (server-rendered)
+   - Browser may buffer <1024 bytes
+   - Errors communicated in content
+
+4. SUSPENSE USAGE
+   - Manual boundaries for components
+   - Wrap async components
+   - Multiple Suspense per page allowed
+   - Progressive rendering benefits
+
+5. BEST PRACTICES
+   - Meaningful loading states (skeletons)
+   - Light-weight UI components
+   - No parameters accepted
+   - Metadata waits before streaming
+
+
+CLIENT COMPONENT HOOKS (require 'use client'):
+- usePathname, useParams, useRouter, useSearchParams, useLinkStatus
+- Import from 'next/navigation', NOT 'next/router'
+- useSearchParams: Wrap in <Suspense> boundary for static rendering
+- useLinkStatus: Must be inside <Link> descendant
+
+SERVER FUNCTIONS (async, use await):
+- cookies, draftMode, redirect, generateStaticParams
+- cookies.set/delete: Only in Server Actions or Route Handlers
+- redirect: Call OUTSIDE try/catch blocks
+- redirect: Throws error, no return needed
+- generateStaticParams: Must return array, even if empty []
+
+SECURITY:
+- Never pass untrusted URLs to router.push/replace (XSS risk)
+- Validate all dynamic routes and search params
+
+BEST PRACTICES:
+- Use <Link> for navigation, not useRouter (unless specific need)
+- For route change events: usePathname + useSearchParams
+- Server Components: Read searchParams from page props, not layouts
+- Static rendering: Return empty array from generateStaticParams for runtime rendering
+- Hydration: When using usePathname with rewrites, add useState/useEffect
+
+MIGRATION:
+- router.events replaced by usePathname + useSearchParams combo
+- pathname string → usePathname()
+- query object → useSearchParams()
+
+NEXT.JS CACHING RULES
+
+UNSTABLE_CACHE:
+- Warning: Will be replaced by 'use cache' when stable
+- NO dynamic data (headers/cookies) inside cache function - pass as arguments
+- Syntax: unstable_cache(asyncFn, keyParts[], options)()
+- Options: { tags: string[], revalidate: number|false }
+- Always returns a function that returns a Promise
+- Include closure variables in keyParts if not passed as params
+
+REVALIDATEPATH:
+- Only invalidates on NEXT path visit (not immediate)
+- Path: case-sensitive, <1024 chars
+- Dynamic segments REQUIRE type param: revalidatePath('/blog/[slug]', 'page')
+- Literal paths NO type param: revalidatePath('/blog/post-1')
+- Type options: 'page' | 'layout'
+- Layout type cascades to child pages
+- revalidatePath('/', 'layout') clears all caches
+- Returns void
+
+REVALIDATETAG:
+- Only invalidates on NEXT path visit (not immediate)
+- Tag: case-sensitive, ≤256 chars
+- Add tags to fetch: fetch(url, { next: { tags: ['tag-name'] } })
+- Returns void
+- Use in Server Actions or Route Handlers
+
+USAGE CONTEXTS:
+- Server Actions: 'use server' directive required
+- Route Handlers: Use in GET/POST methods
+- Cannot use in Client Components
+- All revalidation functions are server-side only
+
+NEXT.JS FETCH RULES:
+- Server Components only: await fetch() directly
+- Cache options: { cache: 'force-cache' | 'no-store' | 'auto' }
+- Revalidate: { next: { revalidate: false | 0 | number } }
+- Tags: { next: { tags: ['tag-name'] } } for revalidateTag()
+- Max tag length: 256 chars, max items: 128
+- Conflicting options forbidden: { revalidate: 3600, cache: 'no-store' }
+- Development: HMR cache affects all fetches
+
+FORMS & SERVER ACTIONS:
+- Server Action: 'use server' directive required
+- Auto receives FormData: const value = formData.get('name')
+- Multiple fields: Object.fromEntries(formData)
+- Additional args: action={updateUser.bind(null, userId)}
+- Validation with zod: schema.safeParse(data)
+- Error handling: useActionState(action, initialState) - changes signature
+- Pending state: useFormStatus() in separate component
+- Optimistic updates: useOptimistic(data, updateFn)
+- Nested actions: <button formAction={serverAction}>
+
+ISR (INCREMENTAL STATIC REGENERATION):
+- Time-based: export const revalidate = 60 // seconds
+- Dynamic params: export const dynamicParams = true/false
+- Prerender: generateStaticParams() returns array of params
+- On-demand: revalidatePath('/path') or revalidateTag('tag')
+- Requirements: Node.js runtime only, no static export
+- Multiple fetches: lowest revalidate wins
+- Empty array from generateStaticParams = runtime generation
+
+LAZY LOADING (CLIENT COMPONENTS):
+- Import: const Component = dynamic(() => import('./Component'))
+- Skip SSR: dynamic(() => import('./Component'), { ssr: false })
+- Named exports: dynamic(() => import('./file').then(mod => mod.Named))
+- Custom loading: { loading: () => <Loading /> }
+- External libs: const Lib = (await import('library')).default
+- Server Components: Children lazy-loaded, not parent
+
+}
